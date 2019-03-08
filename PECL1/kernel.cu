@@ -172,6 +172,7 @@ void generateSeeds(int matriz[])
 }
 
 //Este comentario es para ver como funciona la extension github de visual studio 2017
+
 bool checkFull(int matriz[],int tamano) 
 {
 	for (int i = 0; i < tamano; i++) 
