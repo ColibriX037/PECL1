@@ -16,8 +16,6 @@ int main()
     return 0;
 }
 
-// Helper function for using CUDA to add vectors in parallel.
-
 // Metodo que SOLO muestra matrices cuadradas
 void showMatriz(int matriz[], int anchura)
 {
@@ -67,8 +65,6 @@ void generateSeeds(int matriz[])
 		matriz[r] = 4;
 	}
 }
-
-
 
 bool checkFull(int matriz[],int tamano) 
 {
