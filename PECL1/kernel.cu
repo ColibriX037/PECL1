@@ -1,4 +1,4 @@
-
+2
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include <time.h>
@@ -170,6 +170,8 @@ void generateSeeds(int matriz[])
 		matriz[r] = 4;
 	}
 }
+
+//RAMA DE PRUEBA
 
 bool checkFull(int matriz[],int tamano) 
 {
