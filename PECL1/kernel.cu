@@ -169,7 +169,7 @@ void generateSeeds(int matriz[])
 	}
 }
 
-//RAMA DE PRUEBA
+
 
 bool checkFull(int matriz[],int tamano) 
 {
