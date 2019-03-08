@@ -169,7 +169,7 @@ void generateSeeds(int matriz[])
 	}
 }
 
-// Prueba github
+
 
 bool checkFull(int matriz[],int tamano) 
 {
