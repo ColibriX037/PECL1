@@ -3,10 +3,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-
 int main()
 {
-
     cudaStatus = cudaDeviceReset();
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaDeviceReset failed!");
