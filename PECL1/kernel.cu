@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+cudaError_t cudaStatus;
 int main()
 {
     cudaStatus = cudaDeviceReset();
