@@ -47,6 +47,7 @@ cudaError_t move_right(int * matriz[]) {
 
 }
 
+cudaError_t cudaStatus;
 int main()
 {
 	const int ancho = 4;
@@ -58,7 +59,7 @@ int main()
 		char movimiento = 'p';
 		printf("Tablero:\n");
 		showMatriz(matriz, 4);
-		printf("¿Hacia donde quieres mover?(w/a/s/d): ");
+		printf("ï¿½Hacia donde quieres mover?(w/a/s/d): ");
 		cin >> movimiento;
 		switch (movimiento)
 		{
