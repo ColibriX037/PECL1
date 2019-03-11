@@ -15,40 +15,57 @@ bool checkFull(int matriz[], int tamano);
 cudaError_t cudaStatus;
 bool partida_enCurso = true;
 
-__global__ void mov_upK(int *matriz,int anchura, int altura) {
-	int posicion = blockIdx.x*anchura + threadIdx.x;
+const int altura = 4;
 
-	int superior = posicion - anchura;
+__global__ void mov_upK(int *matriz,const int anchura) {
+	//int posicion = blockIdx.x*anchura + threadIdx.x;
+	//int superior = posicion - anchura;
 
-	if (posicion >= anchura)
+	int x = threadIdx.x;
+
+	int vector[altura];
+	int aux[altura];
+
+
+	int posicion_Vector = 0;
+	for (int i = 0; i < altura; i++)
 	{
-		while (posicion >= anchura) {
-			if (matriz[posicion] == matriz[superior])
-			{
-				matriz[superior] = matriz[superior] * 2;
-				matriz[posicion] = 0;
-			}
-			else if (matriz[superior] == 0)
-			{
-				matriz[superior] = matriz[posicion];
-				matriz[posicion] = 0;
-			}
-			/*
-			else if (superior - anchura < 0) {
-				if (matriz[superior] == matriz[superior - anchura]) {
-					_sleep(10);
-					matriz[superior] = matriz[posicion];
-					matriz[posicion] = 0;
-				}
-			}*/
-				
+		if (matriz[i*anchura + x] != 0) {
+			vector[posicion_Vector] = matriz[i*anchura + x];
+			posicion_Vector++;
+		}
+	}
 
-			posicion -= anchura;
-			superior -= anchura;
+	int posicion_aux = 0;
+	for (int j = 0; j < altura; j++)
+	{
+		if (vector[j] == vector[j+1])
+		{
+			aux[posicion_aux] = vector[j] * 2;
+			j++;
+		}
+		else
+		{
+			aux[j] = vector[j];
 		}
 		
+		posicion_aux++;
+	}
+	
+	for (int k = 0; k < altura; k++)
+	{
+		if (!aux[k])
+		{
+			aux[k] = 0;
+		}
+	}
+
+	for (int i = 0; i < altura; i++)
+	{
+		matriz[i*anchura + x] = aux[i];
 	}
 }
+
 
 cudaError_t move_up(int *matriz) {
 	cudaError_t cudaStatus;
@@ -85,7 +102,7 @@ cudaError_t move_up(int *matriz) {
 		goto Error;
 	}
 
-	mov_upK <<< alto,ancho  >>> (dev_m,ancho,alto);
+	mov_upK <<< 1,ancho  >>> (dev_m,ancho);
 
 	cudaStatus = cudaDeviceSynchronize();
 	if (cudaStatus != cudaSuccess)
@@ -156,7 +173,7 @@ int main()
 		printf("Tablero:\n");
 		generateSeeds(matriz);
 		showMatriz(matriz, 4);
-		printf("�Hacia donde quieres mover?(w/a/s/d): ");
+		printf("Hacia donde quieres mover?(w/a/s/d): ");
 		cin >> movimiento;
 		switch (movimiento)
 		{
