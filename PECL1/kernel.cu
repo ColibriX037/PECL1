@@ -15,23 +15,20 @@ bool checkFull(int matriz[], int tamano);
 cudaError_t cudaStatus;
 bool partida_enCurso = true;
 
-__global__ void mov_upK(int *matriz,int anchura, int altura) {
+__global__ void mov_upK(int *matriz,int *resultado,int anchura, int altura) {
 	int posicion = blockIdx.x*anchura + threadIdx.x;
 
 	int superior = posicion - anchura;
 
 	if (posicion >= anchura)
 	{
-		while (posicion >= anchura) {
 			if (matriz[posicion] == matriz[superior])
 			{
-				matriz[superior] = matriz[superior] * 2;
-				matriz[posicion] = 0;
+				resultado[superior] = matriz[superior] * 2;
 			}
 			else if (matriz[superior] == 0)
 			{
-				matriz[superior] = matriz[posicion];
-				matriz[posicion] = 0;
+				resultado[superior] = matriz[posicion];
 			}
 			/*
 			else if (superior - anchura < 0) {
@@ -41,12 +38,6 @@ __global__ void mov_upK(int *matriz,int anchura, int altura) {
 					matriz[posicion] = 0;
 				}
 			}*/
-				
-
-			posicion -= anchura;
-			superior -= anchura;
-		}
-		
 	}
 }
 
@@ -57,6 +48,7 @@ cudaError_t move_up(int *matriz) {
 	const int alto = 4;
 
 	int *dev_m;
+	int *dev_resultado;
 
 	cudaStatus = cudaSetDevice(0);
 	if (cudaStatus != cudaSuccess)
@@ -66,6 +58,12 @@ cudaError_t move_up(int *matriz) {
 	}
 
 	cudaStatus = cudaMalloc((void**)&dev_m, ancho*alto * sizeof(int));
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en Malloc");
+		goto Error;
+	}
+	cudaStatus = cudaMalloc((void**)&dev_resultado, ancho*alto * sizeof(int));
 	if (cudaStatus != cudaSuccess)
 	{
 		fprintf(stderr, "Error en Malloc");
@@ -85,7 +83,7 @@ cudaError_t move_up(int *matriz) {
 		goto Error;
 	}
 
-	mov_upK <<< alto,ancho  >>> (dev_m,ancho,alto);
+	mov_upK <<< 1,ancho*alto  >>> (dev_m,dev_resultado,ancho,alto);
 
 	cudaStatus = cudaDeviceSynchronize();
 	if (cudaStatus != cudaSuccess)
@@ -101,7 +99,7 @@ cudaError_t move_up(int *matriz) {
 		goto Error;
 	}
 
-	cudaStatus = cudaMemcpy(matriz, dev_m, ancho*alto*sizeof(int), cudaMemcpyDeviceToHost);
+	cudaStatus = cudaMemcpy(matriz, dev_resultado, ancho*alto*sizeof(int), cudaMemcpyDeviceToHost);
 	if (cudaStatus != cudaSuccess)
 	{
 		fprintf(stderr, "Error en memcpy to host de mov_upK");
