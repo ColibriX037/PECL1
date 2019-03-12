@@ -9,7 +9,7 @@ using namespace std;
 
 void showMatriz(int matriz[], int anchura);
 int * generateMatriz();
-void generateSeeds(int matriz[]);
+void generateSeeds(int matriz[],int cantidad);
 bool checkFull(int matriz[], int tamano);
 
 cudaError_t cudaStatus;
