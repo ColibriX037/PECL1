@@ -142,6 +142,7 @@ cudaError_t move_right(int * matriz[]) {
 
 int main()
 {
+	srand(time(NULL));
 	cudaError_t cudaStatus;
 
 	int ancho = 4;
@@ -204,41 +205,28 @@ int * generateMatriz()
 	return c;
 }
 
-void generateSeeds(int matriz[])
+void generateSeeds(int matriz[], int cantidad)
 {
-	srand(time(NULL));
+	for (int i = 0; i < cantidad; i++)
+	{
+		int r = rand() % 16;
+		while (matriz[r] != 0) {
+			r = rand() % 16;
+		}
 
-	int r = rand()%16;
-	while (matriz[r] != 0) {
-		r = rand() % 16;
+		int opcion = rand() % 100;
+		if (opcion <= 50) {
+			matriz[r] = 2;
+		}
+		else if (opcion <= 80 && opcion > 50) {
+			matriz[r] = 4;
+		}
+		else {
+			matriz[r] = 8;
+		}
 	}
 
-	int opcion = rand() % 100;
-	if (opcion <= 50) {
-		matriz[r] = 2;
-	}
-	else if (opcion<=80 && opcion>50) {
-		matriz[r] = 4;
-	}
-	else {
-		matriz[r] = 8;
-	}
-	/////////////////////////////
-	int j = rand() % 16;
-	while (matriz[j] != 0 || j==r) {
-		j = rand() % 16;
-	}
-	
-	opcion = rand() % 100;
-	if (opcion <= 60) {
-		matriz[j] = 2;
-	}
-	else if (opcion <= 80 && opcion > 50) {
-		matriz[j] = 4;
-	}
-	else {
-		matriz[j] = 8;
-	}
+
 }
 
 bool checkFull(int matriz[],int tamano) 
