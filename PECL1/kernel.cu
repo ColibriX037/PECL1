@@ -9,22 +9,27 @@ using namespace std;
 
 void showMatriz(int matriz[], int anchura);
 int * generateMatriz();
-void generateSeeds(int matriz[]);
+void generateSeeds(int matriz[],int cantidad);
 bool checkFull(int matriz[], int tamano);
 
 cudaError_t cudaStatus;
 bool partida_enCurso = true;
 
-const int altura = 4;
-
-__global__ void mov_upK(int *matriz,const int anchura) {
-	//int posicion = blockIdx.x*anchura + threadIdx.x;
-	//int superior = posicion - anchura;
+__global__ void mov_upK(int *matriz, int anchura, int altura) {
 
 	int x = threadIdx.x;
 
-	int vector[altura];
-	int aux[altura];
+	int *vector = (int*)malloc(sizeof(int)*anchura*altura);
+	for (int i = 0; i < anchura*altura; i++)
+	{
+		vector[i] = 0;
+	}
+
+	int *aux = (int*)malloc(sizeof(int)*anchura*altura);
+	for (int i = 0; i < anchura*altura; i++)
+	{
+		aux[i] = 0;
+	}
 
 
 	int posicion_Vector = 0;
@@ -46,7 +51,7 @@ __global__ void mov_upK(int *matriz,const int anchura) {
 		}
 		else
 		{
-			aux[j] = vector[j];
+			aux[posicion_aux] = vector[j];
 		}
 		
 		posicion_aux++;
@@ -67,11 +72,8 @@ __global__ void mov_upK(int *matriz,const int anchura) {
 }
 
 
-cudaError_t move_up(int *matriz) {
+cudaError_t move_up(int *matriz, int ancho, int alto) {
 	cudaError_t cudaStatus;
-	
-	const int ancho = 4;
-	const int alto = 4;
 
 	int *dev_m;
 
@@ -89,27 +91,13 @@ cudaError_t move_up(int *matriz) {
 		goto Error;
 	}
 
-	cudaStatus = cudaMemcpy(dev_m, matriz, ancho*alto*sizeof(int), cudaMemcpyHostToDevice);
+	cudaStatus = cudaMemcpy(dev_m, matriz, ancho*alto *sizeof(int), cudaMemcpyHostToDevice);
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "cudaMemcpy failed!");
 		goto Error;
 	}
 
-	cudaStatus = cudaDeviceSynchronize();
-	if (cudaStatus != cudaSuccess)
-	{
-		fprintf(stderr, "Error en synchronize de mov_upK");
-		goto Error;
-	}
-
-	mov_upK <<< 1,ancho  >>> (dev_m,ancho);
-
-	cudaStatus = cudaDeviceSynchronize();
-	if (cudaStatus != cudaSuccess)
-	{
-		fprintf(stderr, "Error en synchronize de mov_upK");
-		goto Error;
-	}
+	mov_upK <<< 1,ancho  >>> (dev_m,ancho,alto);
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess)
@@ -118,7 +106,7 @@ cudaError_t move_up(int *matriz) {
 		goto Error;
 	}
 
-	cudaStatus = cudaMemcpy(matriz, dev_m, ancho*alto*sizeof(int), cudaMemcpyDeviceToHost);
+	cudaStatus = cudaMemcpy(matriz, dev_m, ancho*alto *sizeof(int), cudaMemcpyDeviceToHost);
 	if (cudaStatus != cudaSuccess)
 	{
 		fprintf(stderr, "Error en memcpy to host de mov_upK");
@@ -131,12 +119,103 @@ Error:
 	return cudaStatus;
 }
 
-__global__ void mov_downK(int * matriz[]) {
+__global__ void mov_downK(int *matriz, int anchura, int altura) {
+	int x = threadIdx.x;
 
+	int *vector = (int*)malloc(sizeof(int)*anchura*altura);
+	for (int i = 0; i < anchura*altura; i++)
+	{
+		vector[i] = 0;
+	}
+
+	int *aux = (int*)malloc(sizeof(int)*anchura*altura);
+	for (int i = 0; i < anchura*altura; i++)
+	{
+		aux[i] = 0;
+	}
+
+	int posicion_Vector = 0;
+	for (int i = altura - 1; i >= 0; i--)
+	{
+		if (matriz[i*anchura + x] != 0) {
+			vector[posicion_Vector] = matriz[i*anchura + x];
+			posicion_Vector++;
+		}
+	}
+
+	int posicion_aux = 0;
+	for (int j = 0; j < altura; j++)
+	{
+		if (vector[j] == vector[j + 1])
+		{
+			aux[posicion_aux] = vector[j] * 2;
+			j++;
+		}
+		else
+		{
+			aux[posicion_aux] = vector[j];
+		}
+		posicion_aux++;
+	}
+
+	for (int k = 0; k < altura; k++)
+	{
+		if (!aux[k])
+		{
+			aux[k] = 0;
+		}
+	}
+			
+	for (int i = 0; i < altura; i++)
+	{
+		matriz[(altura-1-i)*anchura + x] = aux[i];
+	}
 }
 
-cudaError_t move_down(int * matriz[]) {
+cudaError_t move_down(int *matriz, int ancho, int alto) {
 	cudaError_t cudaStatus;
+
+	int *dev_m;
+
+	cudaStatus = cudaSetDevice(0);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en setdevice");
+		goto Error;
+	}
+
+	cudaStatus = cudaMalloc((void**)&dev_m, ancho*alto * sizeof(int));
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en Malloc");
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(dev_m, matriz, ancho*alto * sizeof(int), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy failed!");
+		goto Error;
+	}
+
+	mov_downK << < 1, ancho >> > (dev_m, ancho, alto);
+
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en mov_upK");
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(matriz, dev_m, ancho*alto * sizeof(int), cudaMemcpyDeviceToHost);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en memcpy to host de mov_upK");
+		goto Error;
+	}
+
+Error:
+	cudaFree(dev_m);
+
 	return cudaStatus;
 }
 
@@ -162,25 +241,32 @@ cudaError_t move_right(int * matriz[]) {
 int main()
 {
 	cudaError_t cudaStatus;
+	srand(time(NULL));
 
-	const int ancho = 4;
-	const int alto = 4;
-	int matriz[ancho*alto] = { 0 };
+	int ancho = 4;
+	int alto = 4;
+	int *matriz;
+	matriz = (int*)malloc(ancho*alto * sizeof(int));
+	for (int i = 0; i < ancho*alto; i++) {
+		matriz[i] = 0;
+	}
 
+	
 	while (partida_enCurso) 
 	{
 		char movimiento = 'p';
 		printf("Tablero:\n");
-		generateSeeds(matriz);
+		generateSeeds(matriz, 5);
 		showMatriz(matriz, 4);
 		printf("Hacia donde quieres mover?(w/a/s/d): ");
 		cin >> movimiento;
 		switch (movimiento)
 		{
 		case 'w':
-			cudaStatus = move_up(matriz);
+			cudaStatus = move_up(matriz,ancho,alto);
 		case 'a':
 		case 's':
+			cudaStatus = move_down(matriz, ancho, alto);
 		case 'd':
 
 		default:
@@ -196,7 +282,7 @@ int main()
         fprintf(stderr, "cudaDeviceReset failed!");
         return 1;
     }
-
+	
     return 0;
 }
 
@@ -219,41 +305,28 @@ int * generateMatriz()
 	return c;
 }
 
-void generateSeeds(int matriz[])
+void generateSeeds(int matriz[],int cantidad)
 {
-	srand(time(NULL));
+	for (int i = 0; i < cantidad; i++)
+	{
+		int r = rand() % 16;
+		while (matriz[r] != 0) {
+			r = rand() % 16;
+		}
 
-	int r = rand()%16;
-	while (matriz[r] != 0) {
-		r = rand() % 16;
-	}
-
-	int opcion = rand() % 100;
-	if (opcion <= 50) {
-		matriz[r] = 2;
-	}
-	else if (opcion<=80 && opcion>50) {
-		matriz[r] = 4;
-	}
-	else {
-		matriz[r] = 8;
-	}
-	/////////////////////////////
-	int j = rand() % 16;
-	while (matriz[j] != 0 || j==r) {
-		j = rand() % 16;
+		int opcion = rand() % 100;
+		if (opcion <= 50) {
+			matriz[r] = 2;
+		}
+		else if (opcion <= 80 && opcion > 50) {
+			matriz[r] = 4;
+		}
+		else {
+			matriz[r] = 8;
+		}
 	}
 	
-	opcion = rand() % 100;
-	if (opcion <= 60) {
-		matriz[j] = 2;
-	}
-	else if (opcion <= 80 && opcion > 50) {
-		matriz[j] = 4;
-	}
-	else {
-		matriz[j] = 8;
-	}
+	
 }
 
 bool checkFull(int matriz[],int tamano) 
