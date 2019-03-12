@@ -144,9 +144,13 @@ int main()
 {
 	cudaError_t cudaStatus;
 
-	const int ancho = 4;
-	const int alto = 4;
-	int matriz[ancho*alto] = { 0 };
+	int ancho = 4;
+	int alto = 4;
+	int *matriz;
+	matriz = (int*)malloc(ancho*alto * sizeof(int));
+	for (int i = 0; i < ancho*alto; i++) {
+		matriz[i] = 0;
+	}
 
 	while (partida_enCurso) 
 	{
