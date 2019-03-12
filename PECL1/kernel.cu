@@ -15,6 +15,8 @@ bool checkFull(int matriz[], int tamano);
 cudaError_t cudaStatus;
 bool partida_enCurso = true;
 
+__device__ void sumaIzq(int *tablero, int x, int y, int fil, int col);
+
 __global__ void mov_upK(int *matriz,int *resultado,int anchura, int altura) {
 	int posicion = blockIdx.x*anchura + threadIdx.x;
 
@@ -121,12 +123,147 @@ cudaError_t move_down(int * matriz[]) {
 	return cudaStatus;
 }
 
-__global__ void mov_leftK(int * matriz[]) {
+__global__ void mov_leftK(int *matriz, int anchura, int altura) {
+	int x = threadIdx.x;
+	int y = threadIdx.y;
 
+	sumaIzq(matriz, x, y + 1, altura, anchura);
+	/*
+	int x = threadIdx.x;
+	int y = threadIdx.y;
+
+	if (y != 0 && y < anchura)
+	{
+		printf("Soy el hilo fila %d id %d valor %d\n", x, y, matriz[x*anchura + y]);
+		if (matriz[x*anchura + y] != 0)
+		{
+			printf("Soy el hilo fila %d id %d valor %d distinto de cero\n", x, y, matriz[x*anchura + y]);
+			if (matriz[x*anchura + y] == matriz[x*anchura + (y - 1)])
+			{
+				printf("Soy el hilo fila %d id %d valor %d y mi anterior hilo fila %d id %d valor %d es igual que yo\n", x, y, matriz[x*anchura + y], x, y - 1, matriz[x*anchura + (y - 1)]);
+				int iguales = 0;
+				iguales++;
+				for (int i = 1; i <= y; i++)
+				{
+					if (matriz[x*anchura + y] == matriz[x*anchura + (y - i)])
+					{
+						iguales++;
+					}
+					else {
+						break;
+					}
+				}
+				if (iguales % 2 == 0)
+				{
+					matriz[x*anchura + (y - 1)] = matriz[x*anchura + (y - 1)] * 2;
+					matriz[x*anchura + y] = 0;
+				}
+			}
+			else if (matriz[x*anchura + (y - 1)] == 0)
+			{
+				matriz[x*anchura + (y - 1)] = matriz[x*anchura + y];
+				matriz[x*anchura + y] = 0;
+			}
+		}
+	}
+	*/
+}
+__device__ void sumaIzq(int *tablero, int x, int y, int fil, int col)
+{
+	if (y != 0 && y < col)
+	{
+		printf("Soy el hilo fila %d id %d valor %d\n", x, y, tablero[x*col + y]);
+		if (tablero[x*col + y] != 0)
+		{
+			printf("Soy el hilo fila %d id %d valor %d distinto de cero\n", x, y, tablero[x*col + y]);
+			if (tablero[x*col + y] == tablero[x*col + (y - 1)])
+			{
+				printf("Soy el hilo fila %d id %d valor %d y mi anterior hilo fila %d id %d valor %d es igual que yo\n", x, y, tablero[x*col + y], x, y - 1, tablero[x*col + (y - 1)]);
+				int iguales = 0;
+				iguales++;
+				for (int i = 1; i <= y; i++)
+				{
+					if (tablero[x*col + y] == tablero[x*col + (y - i)])
+					{
+						iguales++;
+					}
+					else {
+						break;
+					}
+				}
+				if (iguales % 2 == 0)
+				{
+					tablero[x*col + (y - 1)] = tablero[x*col + (y - 1)] * 2;
+					tablero[x*col + y] = 0;
+				}
+			}
+			else if (tablero[x*col + (y - 1)] == 0)
+			{
+				tablero[x*col + (y - 1)] = tablero[x*col + y];
+				tablero[x*col + y] = 0;
+			}
+		}
+	}
 }
 
-cudaError_t move_left(int * matriz[]) {
+cudaError_t move_left(int *matriz, int anchura, int altura) {
 	cudaError_t cudaStatus;
+
+	int *dev_m;
+
+	cudaStatus = cudaSetDevice(0);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en setdevice");
+		goto Error;
+	}
+
+	cudaStatus = cudaMalloc((void**)&dev_m, anchura*altura * sizeof(int));
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en Malloc");
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(dev_m, matriz, anchura*altura * sizeof(int), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy failed!");
+		goto Error;
+	}
+
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en synchronize de mov_upK");
+		goto Error;
+	}
+
+	mov_leftK << < 1, anchura*altura >> > (dev_m, anchura, altura);
+
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en synchronize de mov_upK");
+		goto Error;
+	}
+
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en mov_upK");
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(matriz, dev_m, anchura*altura * sizeof(int), cudaMemcpyDeviceToHost);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en memcpy to host de mov_upK");
+		goto Error;
+	}
+
+Error:
+	cudaFree(dev_m);
+
 	return cudaStatus;
 }
 
@@ -157,7 +294,7 @@ int main()
 	{
 		char movimiento = 'p';
 		printf("Tablero:\n");
-		generateSeeds(matriz);
+		generateSeeds(matriz,3);
 		showMatriz(matriz, 4);
 		printf("�Hacia donde quieres mover?(w/a/s/d): ");
 		cin >> movimiento;
@@ -166,6 +303,7 @@ int main()
 		case 'w':
 			cudaStatus = move_up(matriz);
 		case 'a':
+			cudaStatus = move_left(matriz,ancho,alto);
 		case 's':
 		case 'd':
 
