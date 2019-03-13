@@ -4,13 +4,17 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <iostream>
+#include <fstream>
 
 using namespace std;
 
 void showMatriz(int matriz[], int anchura, int altura);
-int * generateMatriz();
-void generateSeeds(int matriz[],int cantidad,char modo);
+void generateSeeds(int matriz[],int ancho, int alto ,int cantidad,char modo);
+void gestionSemillas(int *matriz, int ancho,int numeroSemillas, int alto, char modo);
 bool checkFull(int matriz[], int tamano);
+bool checkMove(int matriz[], int ancho, int alto);
+void guardar(int vidas, int *tablero, int altura, int anchura, char dificultad);
+int* cargar();
 
 cudaError_t cudaStatus;
 bool partida_enCurso = true;
@@ -434,41 +438,82 @@ int main()
 	int ancho;
 	int alto;
 	int numSemillas = 0;
+	int vidas = 5;
 	char modo;
-
-	printf("Indique el ancho de la matriz: ");
-	cin >> ancho;
-	printf("Indique el alto de la matriz: ");
-	cin >> alto;
-	printf("Indique la dificultad del juego (B->Bajo / A->Alto): ");
-	cin >> modo;
-	switch (modo)
-	{
-	case 'B':
-		numSemillas = 15;
-		break;
-	case 'A':
-		numSemillas = 8;
-		break;
-	default:
-		break;
-	}
-
-	
+	char cargado;
+	int *datos;
 	int *matriz;
-	matriz = (int*)malloc(ancho*alto * sizeof(int));
-	for (int i = 0; i < ancho*alto; i++) {
-		matriz[i] = 0;
-	}
 
-	
-	while (partida_enCurso) 
+	printf("Desea comprobar si hay partidas guardadas?(y/n): ");
+	cin >> cargado;
+	if (cargado == 'y') 
 	{
+		datos = cargar();
+
+		vidas = datos[0];
+		alto = datos[1];
+		ancho = datos[2];
+
+		int dificultad = datos[3];
+
+		if(dificultad == 0)
+		{
+			modo = 'B';
+			numSemillas = 15;
+		}
+		else
+		{
+			modo = 'A';
+			numSemillas = 8;
+		}
+
+		matriz = (int*)malloc(ancho*alto * sizeof(int));
+
+		for (int i = 0; i < alto*ancho; i++)
+		{
+			matriz[i] = datos[4 + i];
+		}
+	}
+	else
+	{
+		printf("Indique el ancho de la matriz: ");
+		cin >> ancho;
+		printf("Indique el alto de la matriz: ");
+		cin >> alto;
+		printf("Indique la dificultad del juego (B->Bajo / A->Alto): ");
+		cin >> modo;
+		switch (modo)
+		{
+		case 'B':
+			numSemillas = 15;
+			break;
+		case 'A':
+			numSemillas = 8;
+			break;
+		default:
+			break;
+		}
+
+
+
+		matriz = (int*)malloc(ancho*alto * sizeof(int));
+		for (int i = 0; i < ancho*alto; i++) {
+			matriz[i] = 0;
+		}
+	}
+	
+
+	while (!checkFull(matriz,ancho*alto) || checkMove(matriz,ancho,alto)) 
+	{
+		system("CLS");
+
+		gestionSemillas(matriz, ancho,numSemillas, alto, modo);
+
 		char movimiento = 'p';
+		printf("Vidas restantes: %d\n", vidas);
 		printf("Tablero:\n");
-		generateSeeds(matriz, numSemillas,modo);
 		showMatriz(matriz, ancho,alto);
-		printf("Hacia donde quieres mover?(w/a/s/d): ");
+		printf("Hacia donde quieres mover?(w/a/s/d) Para guardar teclee g: ");
 		cin >> movimiento;
 		switch (movimiento)
 		{
@@ -484,10 +529,24 @@ int main()
 		case 'd':
 			cudaStatus = move_right(matriz, ancho, alto);
 			break;
+		case 'g':
+			guardar(vidas,matriz,alto,ancho,modo);
+			printf("Partida guardada, hasta pronto!");
+			return 0;
+			break;
 		default:
 			break;
 		}
-		system("CLS");
+		
+		
+		if (!(!checkFull(matriz, ancho*alto) || checkMove(matriz, ancho, alto)) && vidas > 0)
+		{
+			for (int i = 0; i < ancho*alto; i++) {
+				matriz[i] = 0;
+			}
+			vidas--;
+		}
+	
 	}
 
 	
@@ -514,23 +573,19 @@ void showMatriz(int matriz[], int anchura , int altura)
 	}
 }
 
-int * generateMatriz()
+void generateSeeds(int matriz[], int ancho, int alto,int cantidad, char modo)
 {
-	const int ancho = 4;
-	const int alto = 4;
-	int c[ancho*alto] = { 0 };
-	return c;
-}
+	int total = ancho * alto;
+	int num;
 
-void generateSeeds(int matriz[],int cantidad, char modo)
-{
 	if (modo == 'B') 
 	{
+		
 		for (int i = 0; i < cantidad; i++)
 		{
-			int r = rand() % 16;
+			int r = rand() % total;
 			while (matriz[r] != 0) {
-				r = rand() % 16;
+				r = rand() % total;
 			}
 
 			int opcion = rand() % 100;
@@ -549,9 +604,9 @@ void generateSeeds(int matriz[],int cantidad, char modo)
 	{
 		for (int i = 0; i < cantidad; i++)
 		{
-			int r = rand() % 16;
+			int r = rand() % total;
 			while (matriz[r] != 0) {
-				r = rand() % 16;
+				r = rand() % total;
 			}
 
 			int opcion = rand() % 100;
@@ -569,6 +624,45 @@ void generateSeeds(int matriz[],int cantidad, char modo)
 	
 }
 
+bool checkMove(int matriz[], int ancho, int alto)
+{
+    int contador = 0;
+    int paso = 0;
+    for (int i = 0; i < alto-1; i++)
+    {
+        for ( int j = 0; j < ancho - 1; j++)
+        {
+            if (matriz[paso] == matriz[paso + ancho] && matriz[paso + ancho]==0)
+                return true;
+            if (matriz[paso] == matriz[paso + 1] && matriz[paso + 1] == 0)
+                return true;
+            paso++;
+        }
+        paso = paso + 2;
+
+    }
+
+    paso = paso + ancho-1;
+
+    for (int k = 0; k < alto - 1; k++) 
+    {
+        if (matriz[paso] == matriz[paso + ancho] && matriz[paso + ancho] == 0)
+            return true;
+    }
+
+    paso = ancho*alto-2;
+
+    for (int l = 0; l < ancho-2; l++) 
+    {
+        if (matriz[paso] == matriz[paso + 1] && matriz[paso + ancho] == 0)
+            return true;
+        paso--;
+    }
+
+	return false;
+
+}
+
 bool checkFull(int matriz[],int tamano) 
 {
 	for (int i = 0; i < tamano; i++) 
@@ -579,4 +673,105 @@ bool checkFull(int matriz[],int tamano)
 		}
 	}
 	return true;
+}
+
+void gestionSemillas(int *matriz, int ancho,int numeroSemillas, int alto, char modo)
+{
+	if (!checkFull(matriz, ancho*alto))
+	{
+		int n = 0;
+		for (int i = 0; i < ancho*alto; i++)
+		{
+			if (matriz[i] == 0)
+				n++;
+		}
+		if (modo == 'B')
+		{
+			if (n < 15)
+			{
+				generateSeeds(matriz, ancho, alto, n, modo);
+			}
+			else {
+				generateSeeds(matriz, ancho, alto, numeroSemillas, modo);
+			}
+			
+		}
+		
+	}
+}
+
+void guardar(int vidas, int *matriz, int altura, int anchura, char dificultad) {
+
+	ofstream archivo;
+	int dif;
+
+	archivo.open("2048_savedata.txt", ios::out); //Creamos o reemplazamos el archivo
+
+	//Si no se puede guardar ERROR
+	if (archivo.fail())
+	{
+		cout << "Error al guardar la partida.\n";
+		exit(1);
+	}
+
+	if (dificultad == 'B')
+	{
+		dif = 0;
+	}
+	else
+	{
+		dif = 1;
+	}
+
+	archivo << vidas << endl; //Guardamos las vidas
+	archivo << altura << endl; //Guardamos las altura
+	archivo << anchura << endl; //Guardamos las anchura
+	archivo << dif << endl; //Guardamos la dificultad
+
+	//Guardamos la matriz
+	for (int i = 0; i < (altura*anchura); i++)
+	{
+		archivo << matriz[i] << " ";
+	}
+	cout << "\nPartida guardada con exito." << endl;
+
+	archivo.close(); //Cerramos el archivo
+}
+
+int* cargar() {
+
+	ifstream archivo;
+	int i = 4, vidas, altura, anchura, dif;
+	int *partida;
+
+	archivo.open("2048_savedata.txt", ios::in); //Abrimos el archivo en modo lectura
+
+	//Si no se puede cargar ERROR
+	if (archivo.fail())
+	{
+		cout << "Error al abrir la partida guardada. El fichero no existe o está corrupto\n";
+		exit(1);
+	}
+
+	archivo >> vidas;
+	archivo >> altura;
+	archivo >> anchura;
+	archivo >> dif;
+
+	partida = (int*)malloc(altura * anchura * sizeof(int)); //Reservamos memoria para los datos de la partida
+
+	partida[0] = vidas; //Guardamos vidas
+	partida[1] = altura; //Guardamos altura
+	partida[2] = anchura; //Guardamos anchura
+	partida[3] = dif; //Guardamos la dificultad
+
+	//Guardamos la matriz
+	while (!archivo.eof()) { //Mientras no sea el final del archivo
+		archivo >> partida[i];
+		i++;
+	}
+
+	archivo.close(); //Cerramos el archivo
+
+	return partida;
 }
