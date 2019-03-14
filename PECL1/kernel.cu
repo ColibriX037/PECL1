@@ -27,8 +27,6 @@ cudaError_t cudaStatus;
 __device__ void add_up(int *matriz, int x, int y, int altura, int anchura)
 {
 	if (x != 0 && y < anchura) //Los primeros hilos no deben realizar ninguna operacion pues serán modificados por los demas
-
-	{
 	{
 		if (matriz[x*anchura + y] != 0) //Si es distinto de 0, gestiona su posible suma o desplazamiento
 		{
@@ -414,7 +412,6 @@ __device__ void add_right(int *matriz, int x, int y, int altura, int anchura)
 			if (matriz[x*anchura + y] == matriz[x*anchura + (y + 1)]) //Si es igual a su superior, se procede a comprobar el numero de celdas con el mismo numero que hay en esa columna
 
 			{
-			{
 				int iguales = 0;
 				iguales++;
 				for (int i = 1; y + i < anchura; i++)
@@ -445,13 +442,12 @@ __device__ void add_right(int *matriz, int x, int y, int altura, int anchura)
 /*	stack_right
 *	Función del kernel para desplazar todos los números hacia la derecha.
 */
-__device__ void stack_right(int *matriz, int anchura, int altura, int x, int y) {
+__device__ void stack_right(int *matriz, int anchura, int altura, int x, int y) 
+{
 
 	for (int i = anchura - 1; i > 0; i--) //realizaremos el desplazamiento celda a celda una altura-1 veces para gestionar la posibilidad del ultimo poniendose el primero de la lista
 	{
 		if ((y != anchura-1) && (matriz[x*anchura + y] != 0) && matriz[x*anchura + (y + 1)] == 0) //Si la celda pertenece a la primera fila, es 0 o su superior no es 0, no hace nada
-
-		{
 		{
 			matriz[x*anchura + (y + 1)] = matriz[x*anchura + y]; //Si lo es, desplazamos la celda
 			matriz[x*anchura + y] = 0;
@@ -463,7 +459,8 @@ __device__ void stack_right(int *matriz, int anchura, int altura, int x, int y) 
 /*	mov_rightK
 *	Kernel que gestiona las operaciones para mover hacia la derecha los numeros, sumandolos en el proceso
 */
-__global__ void mov_rightK(int *matriz, int anchura, int altura) {
+__global__ void mov_rightK(int *matriz, int anchura, int altura) 
+{
 	int x = threadIdx.x;
 	int y = threadIdx.y;
 
