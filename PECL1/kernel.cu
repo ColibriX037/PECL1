@@ -41,8 +41,68 @@ cudaError_t move_down(int *matriz, int ancho, int alto) {
 	return cudaStatus;
 }
 
-__global__ void mov_leftK(int *matriz, int anchura, int altura) {
+__device__ void add_left(int *matriz, int x, int y, int altura, int anchura)
+{
+	if (y != 0 && y < anchura)
+	{
+		//printf("Soy el hilo alturaa %d id %d valor %d\n", x, y, matriz[x*anchura + y]);
+		if (matriz[x*anchura + y] != 0)
+		{
+			//printf("Soy el hilo alturaa %d id %d valor %d distinto de cero\n", x, y, matriz[x*anchura + y]);
+			if (matriz[x*anchura + y] == matriz[x*anchura + (y - 1)])
+			{
+				//printf("Soy el hilo alturaa %d id %d valor %d y mi anterior hilo alturaa %d id %d valor %d es igual que yo\n", x, y, matriz[x*anchura + y], x, y - 1, matriz[x*anchura + (y - 1)]);
+				int iguales = 0;
+				iguales++;
+				for (int i = 1; i <= y; i++)
+				{
+					if (matriz[x*anchura + y] == matriz[x*anchura + (y - i)])
+					{
+						iguales++;
+					}
+					else {
+						break;
+					}
+				}
+				if (iguales % 2 == 0)
+				{
+					matriz[x*anchura + (y - 1)] = matriz[x*anchura + (y - 1)] * 2;
+					matriz[x*anchura + y] = 0;
+				}
+			}
+			else if (matriz[x*anchura + (y - 1)] == 0)
+			{
+				matriz[x*anchura + (y - 1)] = matriz[x*anchura + y];
+				matriz[x*anchura + y] = 0;
+			}
+		}
+	}
+}
 
+__device__ void stack_left(int *matriz, int anchura, int altura, int x, int y) {
+
+	if (x != 0)
+	{
+		for (int i = x; i > 0; i--)
+		{
+			if (matriz[x*anchura + (y - 1)] == 0)
+			{
+				matriz[x*anchura + (y - 1)] = matriz[x*anchura + y];
+				matriz[x*anchura + y] = 0;
+			}
+			__syncthreads();
+		}
+	}
+
+}
+
+__global__ void mov_leftK(int *matriz, int anchura, int altura) {
+	int x = threadIdx.x;
+	int y = threadIdx.y;
+
+	stack_left(matriz, anchura, altura, x, y);
+	add_left(matriz, x, y, altura, anchura);
+	stack_left(matriz, anchura, altura, x, y);
 }
 
 cudaError_t move_left(int *matriz, int ancho, int alto) {
@@ -54,6 +114,8 @@ cudaError_t move_left(int *matriz, int ancho, int alto) {
 __global__ void mov_rightK(int *matriz, int anchura, int altura) {
 
 }
+
+
 
 cudaError_t move_right(int *matriz, int ancho, int alto) {
 	cudaError_t cudaStatus;
