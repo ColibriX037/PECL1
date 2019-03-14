@@ -17,25 +17,26 @@ int checkFull(int *matriz, int tamano);
 bool checkMove(int *matriz, int ancho, int alto);
 void guardar(int vidas, int *tablero, int altura, int anchura, char dificultad);
 int* cargar();
+int* MostrarEspecificaciones();
 
 cudaError_t cudaStatus;
 
 __device__ void add_up(int *matriz, int x, int y, int altura, int anchura)
 {
-	if (y != 0 && y < anchura)
+	if (x != 0 && y < anchura)
 	{
 		//printf("Soy el hilo alturaa %d id %d valor %d\n", x, y, matriz[x*anchura + y]);
 		if (matriz[x*anchura + y] != 0)
 		{
 			//printf("Soy el hilo alturaa %d id %d valor %d distinto de cero\n", x, y, matriz[x*anchura + y]);
-			if (matriz[x*anchura + y] == matriz[x*anchura + (y - 1)])
+			if (matriz[x*anchura + y] == matriz[(x-1)*anchura + y])
 			{
 				//printf("Soy el hilo alturaa %d id %d valor %d y mi anterior hilo alturaa %d id %d valor %d es igual que yo\n", x, y, matriz[x*anchura + y], x, y - 1, matriz[x*anchura + (y - 1)]);
 				int iguales = 0;
 				iguales++;
-				for (int i = 1; i <= y; i++)
+				for (int i = 1; i <= x; i++)
 				{
-					if (matriz[x*anchura + y] == matriz[x*anchura + (y - i)])
+					if (matriz[x*anchura + y] == matriz[(x-i)*anchura + y])
 					{
 						iguales++;
 					}
@@ -45,13 +46,13 @@ __device__ void add_up(int *matriz, int x, int y, int altura, int anchura)
 				}
 				if (iguales % 2 == 0)
 				{
-					matriz[x*anchura + (y - 1)] = matriz[x*anchura + (y - 1)] * 2;
+					matriz[(x-1)*anchura + y] = matriz[(x-1)*anchura + y] * 2;
 					matriz[x*anchura + y] = 0;
 				}
 			}
-			else if (matriz[x*anchura + (y - 1)] == 0)
+			else if (matriz[(x - 1)*anchura + y] == 0)
 			{
-				matriz[x*anchura + (y - 1)] = matriz[x*anchura + y];
+				matriz[(x - 1)*anchura + y] = matriz[x*anchura + y];
 				matriz[x*anchura + y] = 0;
 			}
 		}
@@ -77,7 +78,8 @@ __global__ void mov_upK(int *matriz, int anchura, int altura) {
 	int y = threadIdx.y;
 
 	stack_up(matriz, anchura, altura, x, y);
-	//add_up(matriz, x, y, altura, anchura);
+	add_up(matriz, x, y, altura, anchura);
+	__syncthreads();
 	stack_up(matriz, anchura, altura, x, y);
 }
 
@@ -87,6 +89,7 @@ cudaError_t move_up(int *matriz, int ancho, int alto) {
 
 	int *dev_m;
 
+	
 	cudaStatus = cudaSetDevice(0);
 	if (cudaStatus != cudaSuccess)
 	{
@@ -108,7 +111,7 @@ cudaError_t move_up(int *matriz, int ancho, int alto) {
 	}
 
 	dim3 dimgrid(1, 1);
-	dim3 dimblock(ancho, alto, 1);
+	dim3 dimblock(alto, ancho, 1);
 
 	mov_upK << < dimgrid, dimblock >> > (dev_m, ancho, alto);
 
@@ -138,13 +141,120 @@ Error:
 	return cudaStatus;
 }
 
+__device__ void add_down(int *matriz, int x, int y, int altura, int anchura)
+{
+	if (x != altura-1 && y < anchura)
+	{
+		//printf("Soy el hilo alturaa %d id %d valor %d\n", x, y, matriz[x*anchura + y]);
+		if (matriz[x*anchura + y] != 0)
+		{
+			//printf("Soy el hilo alturaa %d id %d valor %d distinto de cero\n", x, y, matriz[x*anchura + y]);
+			if (matriz[x*anchura + y] == matriz[(x + 1)*anchura + y])
+			{
+				//printf("Soy el hilo alturaa %d id %d valor %d y mi anterior hilo alturaa %d id %d valor %d es igual que yo\n", x, y, matriz[x*anchura + y], x, y - 1, matriz[x*anchura + (y - 1)]);
+				int iguales = 0;
+				iguales++;
+				for (int i = 1; x+i <= altura; i++)
+				{
+					if (matriz[x*anchura + y] == matriz[(x + i)*anchura + y])
+					{
+						iguales++;
+					}
+					else {
+						break;
+					}
+				}
+				if (iguales % 2 == 0)
+				{
+					matriz[(x + 1)*anchura + y] = matriz[(x + 1)*anchura + y] * 2;
+					matriz[x*anchura + y] = 0;
+				}
+			}
+			else if (matriz[(x + 1)*anchura + y] == 0)
+			{
+				matriz[(x + 1)*anchura + y] = matriz[x*anchura + y];
+				matriz[x*anchura + y] = 0;
+			}
+		}
+	}
+}
+
+__device__ void stack_down(int *matriz, int anchura, int altura, int x, int y) {
+	//printf("soy el hilo x%d y%d y empiezo a ejecutar\n", x, y);
+	for (int i = altura - 1; i > 0; i--)
+	{
+		if ((x != altura-1) && (matriz[x*anchura + y] != 0) && matriz[(x+1)*anchura + y] == 0)
+		{
+			//printf("soy el hilo x%d y%d y el de mi izquierda es un 0\n", x, y);
+			matriz[(x + 1)*anchura + y] = matriz[x*anchura + y];
+			matriz[x*anchura + y] = 0;
+		}
+		__syncthreads();
+	}
+}
 
 __global__ void mov_downK(int *matriz, int anchura, int altura) {
+	int x = threadIdx.x;
+	int y = threadIdx.y;
 
+	stack_down(matriz, anchura, altura, x, y);
+	add_down(matriz, x, y, altura, anchura);
+	__syncthreads();
+	stack_down(matriz, anchura, altura, x, y);
 }
 
 cudaError_t move_down(int *matriz, int ancho, int alto) {
 	cudaError_t cudaStatus;
+
+	int *dev_m;
+
+	cudaStatus = cudaSetDevice(0);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en setdevice");
+		goto Error;
+	}
+
+	cudaStatus = cudaMalloc((void**)&dev_m, ancho*alto * sizeof(int));
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en Malloc");
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(dev_m, matriz, ancho*alto * sizeof(int), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy failed!");
+		goto Error;
+	}
+
+	dim3 dimgrid(1, 1);
+	dim3 dimblock(alto, ancho, 1);
+
+	mov_downK << < dimgrid, dimblock >> > (dev_m, ancho, alto);
+
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+		goto Error;
+	}
+
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en mov_upK");
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(matriz, dev_m, ancho*alto * sizeof(int), cudaMemcpyDeviceToHost);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en memcpy to host de mov_upK");
+		goto Error;
+	}
+
+Error:
+	cudaFree(dev_m);
 
 	return cudaStatus;
 }
@@ -208,6 +318,7 @@ __global__ void mov_leftK(int *matriz, int anchura, int altura) {
 
 	stack_left(matriz, anchura, altura, x, y);
 	add_left(matriz, x, y, altura, anchura);
+	__syncthreads();
 	stack_left(matriz, anchura, altura, x, y);
 }
 
@@ -237,7 +348,7 @@ cudaError_t move_left(int *matriz, int ancho, int alto) {
 	}
 
 	dim3 dimgrid(1,1);
-	dim3 dimblock(ancho,alto,1);
+	dim3 dimblock(alto, ancho, 1);
 
 	mov_leftK << < dimgrid, dimblock>> > (dev_m, ancho, alto);
 
@@ -280,7 +391,7 @@ __device__ void add_right(int *matriz, int x, int y, int altura, int anchura)
 				//printf("Soy el hilo alturaa %d id %d valor %d y mi anterior hilo alturaa %d id %d valor %d es igual que yo\n", x, y, matriz[x*anchura + y], x, y - 1, matriz[x*anchura + (y - 1)]);
 				int iguales = 0;
 				iguales++;
-				for (int i = 1; i <= y; i++)
+				for (int i = 1; y + i < anchura; i++)
 				{
 					if (matriz[x*anchura + y] == matriz[x*anchura + (y + i)])
 					{
@@ -325,6 +436,7 @@ __global__ void mov_rightK(int *matriz, int anchura, int altura) {
 
 	stack_right(matriz, anchura, altura, x, y);
 	add_right(matriz, x, y, altura, anchura);
+	__syncthreads();
 	stack_right(matriz, anchura, altura, x, y);
 }
 
@@ -356,7 +468,7 @@ cudaError_t move_right(int *matriz, int ancho, int alto) {
 	}
 
 	dim3 dimgrid(1, 1);
-	dim3 dimblock(ancho, alto, 1);
+	dim3 dimblock(alto, ancho, 1);
 
 	mov_rightK << < dimgrid, dimblock >> > (dev_m, ancho, alto);
 
@@ -401,6 +513,9 @@ int main()
 	char ia;
 	int *datos;
 	int *matriz;
+	int *especificaciones;
+
+	especificaciones = MostrarEspecificaciones();
 
 	printf("Desea activar la IA? (y/n)");
 	cin >> ia;
@@ -441,6 +556,14 @@ int main()
 		cin >> ancho;
 		printf("Indique el alto de la matriz: ");
 		cin >> alto;
+
+		if (alto*ancho > especificaciones[0])
+		{
+			printf("La matriz seleccionada es demasiado grande para tu tarjeta grafica. Lo siento.");
+			return 0;
+		}
+
+
 		printf("Indique la dificultad del juego (B->Bajo / A->Alto): ");
 		cin >> modo;
 		switch (modo)
@@ -598,7 +721,7 @@ int main()
 			default:
 				break;
 			}
-
+			//Sleep(100);
 
 			if (!(!checkFull(matriz, ancho*alto) || checkMove(matriz, ancho, alto)) && vidas > 0)
 			{
@@ -765,6 +888,17 @@ void gestionSemillas(int *matriz, int ancho, int numeroSemillas, int alto, char 
 			}
 
 		}
+		else if (modo == 'A')
+		{
+			if (n < 8)
+			{
+				generateSeeds(matriz, ancho, alto, n, modo);
+			}
+			else {
+				generateSeeds(matriz, ancho, alto, numeroSemillas, modo);
+			}
+
+		}
 
 	}
 }
@@ -843,4 +977,24 @@ int* cargar() {
 	archivo.close(); //Cerramos el archivo
 
 	return partida;
+}
+
+int* MostrarEspecificaciones()
+{
+	cudaDeviceProp prop;
+	cudaGetDeviceProperties(&prop, 0);
+
+	int * especificacion;
+
+	especificacion = (int*)malloc(2 * sizeof(int));
+	for (int i = 0; i < 2; i++) {
+		especificacion[i] = 0;
+	}
+
+	especificacion[0] = prop.maxThreadsPerBlock;
+	especificacion[1] =  * prop.maxGridSize;
+	
+	printf("Especificaciones maximas: %d hilos/bloque %d gridsize.\n", especificacion[0], especificacion[1]);
+
+	return especificacion;
 }
