@@ -81,19 +81,17 @@ __device__ void add_left(int *matriz, int x, int y, int altura, int anchura)
 
 __device__ void stack_left(int *matriz, int anchura, int altura, int x, int y) {
 
-	if (x != 0)
-	{
-		for (int i = x; i > 0; i--)
+	//printf("soy el hilo x%d y%d y empiezo a ejecutar\n", x, y);
+		for (int i = anchura-1; i > 0; i--)
 		{
-			if (matriz[x*anchura + (y - 1)] == 0)
+			if ( (y != 0) && (matriz[x*anchura +y]!=0) && matriz[x*anchura + (y - 1)] == 0)
 			{
+				//printf("soy el hilo x%d y%d y el de mi izquierda es un 0\n", x, y);
 				matriz[x*anchura + (y - 1)] = matriz[x*anchura + y];
 				matriz[x*anchura + y] = 0;
 			}
 			__syncthreads();
 		}
-	}
-
 }
 
 __global__ void mov_leftK(int *matriz, int anchura, int altura) {
@@ -107,6 +105,56 @@ __global__ void mov_leftK(int *matriz, int anchura, int altura) {
 
 cudaError_t move_left(int *matriz, int ancho, int alto) {
 	cudaError_t cudaStatus;
+
+	int *dev_m;
+
+	cudaStatus = cudaSetDevice(0);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en setdevice");
+		goto Error;
+	}
+
+	cudaStatus = cudaMalloc((void**)&dev_m, ancho*alto * sizeof(int));
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en Malloc");
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(dev_m, matriz, ancho*alto * sizeof(int), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy failed!");
+		goto Error;
+	}
+
+	dim3 dimgrid(1,1);
+	dim3 dimblock(ancho,alto,1);
+
+	mov_leftK << < dimgrid, dimblock>> > (dev_m, ancho, alto);
+
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+		goto Error;
+	}
+
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en mov_upK");
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(matriz, dev_m, ancho*alto * sizeof(int), cudaMemcpyDeviceToHost);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en memcpy to host de mov_upK");
+		goto Error;
+	}
+
+Error:
+	cudaFree(dev_m);
 
 	return cudaStatus;
 }
@@ -204,7 +252,7 @@ int main()
 	{
 		while ((!checkFull(matriz, ancho*alto) || checkMove(matriz, ancho, alto)) && vidas > 0)
 		{
-			system("CLS");
+			//system("CLS");
 
 
 
