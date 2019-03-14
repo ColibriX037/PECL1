@@ -20,6 +20,10 @@ int* cargar();
 
 cudaError_t cudaStatus;
 
+__device__ void stack_up() {
+
+}
+
 __global__ void mov_upK(int *matriz, int anchura, int altura) {
 
 }
