@@ -5,14 +5,16 @@
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
+#include <windows.h>
+
 
 using namespace std;
 
-void showMatriz(int matriz[], int anchura, int altura);
-void generateSeeds(int matriz[],int ancho, int alto ,int cantidad,char modo);
+void showMatriz(int *matriz, int anchura, int altura);
+void generateSeeds(int *matriz,int ancho, int alto ,int cantidad,char modo);
 void gestionSemillas(int *matriz, int ancho,int numeroSemillas, int alto, char modo);
-bool checkFull(int matriz[], int tamano);
-bool checkMove(int matriz[], int ancho, int alto);
+int checkFull(int *matriz, int tamano);
+bool checkMove(int *matriz, int ancho, int alto);
 void guardar(int vidas, int *tablero, int altura, int anchura, char dificultad);
 int* cargar();
 
@@ -102,6 +104,12 @@ cudaError_t move_up(int *matriz, int ancho, int alto) {
 	}
 
 	mov_upK <<< 1,ancho  >>> (dev_m,ancho,alto);
+
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+		goto Error;
+	}
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess)
@@ -202,6 +210,12 @@ cudaError_t move_down(int *matriz, int ancho, int alto) {
 	}
 
 	mov_downK << < 1, ancho >> > (dev_m, ancho, alto);
+
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+		goto Error;
+	}
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess)
@@ -304,7 +318,13 @@ cudaError_t move_left(int *matriz, int ancho, int alto) {
 		goto Error;
 	}
 
-	mov_leftK << < 1, ancho >> > (dev_m, ancho, alto);
+	mov_leftK << < 1, alto >> > (dev_m, ancho, alto);
+
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+		goto Error;
+	}
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess)
@@ -407,7 +427,13 @@ cudaError_t move_right(int *matriz, int ancho, int alto) {
 		goto Error;
 	}
 
-	mov_rightK << < 1, ancho >> > (dev_m, ancho, alto);
+	mov_rightK << < 1, alto >> > (dev_m, ancho, alto);
+
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+		goto Error;
+	}
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess)
@@ -416,12 +442,15 @@ cudaError_t move_right(int *matriz, int ancho, int alto) {
 		goto Error;
 	}
 
+
 	cudaStatus = cudaMemcpy(matriz, dev_m, ancho*alto * sizeof(int), cudaMemcpyDeviceToHost);
 	if (cudaStatus != cudaSuccess)
 	{
 		fprintf(stderr, "Error en memcpy to host de mov_upK");
 		goto Error;
 	}
+
+
 
 Error:
 	cudaFree(dev_m);
@@ -441,8 +470,12 @@ int main()
 	int vidas = 5;
 	char modo;
 	char cargado;
+	char ia;
 	int *datos;
 	int *matriz;
+
+	printf("Desea activar la IA? (y/n)");
+	cin >> ia;
 
 	printf("Desea comprobar si hay partidas guardadas?(y/n): ");
 	cin >> cargado;
@@ -502,66 +535,168 @@ int main()
 		}
 	}
 	
-
-	while (!checkFull(matriz,ancho*alto) || checkMove(matriz,ancho,alto)) 
+	if (ia == 'n')
 	{
-		system("CLS");
-
-		gestionSemillas(matriz, ancho,numSemillas, alto, modo);
-
-		char movimiento = 'p';
-		printf("Vidas restantes: %d\n", vidas);
-		printf("Tablero:\n");
-		showMatriz(matriz, ancho,alto);
-		printf("Hacia donde quieres mover?(w/a/s/d) Para guardar teclee g: ");
-		cin >> movimiento;
-		switch (movimiento)
+		while ((!checkFull(matriz, ancho*alto) || checkMove(matriz, ancho, alto)) && vidas > 0)
 		{
-		case 'w':
-			cudaStatus = move_up(matriz,ancho,alto);
-			break;
-		case 'a':
-			cudaStatus = move_left(matriz, ancho, alto);
-			break;
-		case 's':
-			cudaStatus = move_down(matriz, ancho, alto);
-			break;
-		case 'd':
-			cudaStatus = move_right(matriz, ancho, alto);
-			break;
-		case 'g':
-			guardar(vidas,matriz,alto,ancho,modo);
-			printf("Partida guardada, hasta pronto!");
-			return 0;
-			break;
-		default:
-			break;
-		}
-		
-		
-		if (!(!checkFull(matriz, ancho*alto) || checkMove(matriz, ancho, alto)) && vidas > 0)
-		{
-			for (int i = 0; i < ancho*alto; i++) {
-				matriz[i] = 0;
+			system("CLS");
+
+			
+
+			if (!(!checkFull(matriz, ancho*alto) || checkMove(matriz, ancho, alto)) && vidas > 0)
+			{
+				for (int i = 0; i < ancho*alto; i++) {
+					matriz[i] = 0;
+				}
+				vidas--;
 			}
-			vidas--;
+
+
+			
+
+			gestionSemillas(matriz, ancho, numSemillas, alto, modo);
+
+			printf("checkMove: %d\n", checkMove(matriz, ancho, alto));
+			printf("checkFull: %d\n", checkFull(matriz, ancho*alto));
+
+			char movimiento = 'p';
+			printf("Vidas restantes: %d\n", vidas);
+			printf("Tablero:\n");
+			showMatriz(matriz, ancho, alto);
+			printf("Hacia donde quieres mover?(w/a/s/d) Para guardar teclee g: ");
+			cin >> movimiento;
+			switch (movimiento)
+			{
+			case 'w':
+				cudaStatus = move_up(matriz, ancho, alto);
+				break;
+			case 'a':
+				cudaStatus = move_left(matriz, ancho, alto);
+				break;
+			case 's':
+				cudaStatus = move_down(matriz, ancho, alto);
+				break;
+			case 'd':
+				cudaStatus = move_right(matriz, ancho, alto);
+				break;
+			case 'g':
+				guardar(vidas, matriz, alto, ancho, modo);
+				printf("Partida guardada, hasta pronto!");
+				return 0;
+			default:
+				break;
+			}
+
+
+			if (!(!checkFull(matriz, ancho*alto) || checkMove(matriz, ancho, alto)) && vidas > 0)
+			{
+				for (int i = 0; i < ancho*alto; i++) {
+					matriz[i] = 0;
+				}
+				vidas--;
+			}
+
 		}
-	
+
+
+
+		cudaStatus = cudaDeviceReset();
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "cudaDeviceReset failed!");
+			return 1;
+		}
 	}
+	else {
 
+		while ((!checkFull(matriz, ancho*alto) || checkMove(matriz, ancho, alto)) && vidas > 0)
+		{
+			if (!(!checkFull(matriz, ancho*alto) || checkMove(matriz, ancho, alto)) && vidas > 0)
+			{
+				for (int i = 0; i < ancho*alto; i++) {
+					matriz[i] = 0;
+				}
+				vidas--;
+			}
+
+
+			system("CLS");
+
+			gestionSemillas(matriz, ancho, numSemillas, alto, modo);
+
+			printf("checkMove: %d\n", checkMove(matriz, ancho, alto));
+			printf("checkFull: %d\n", checkFull(matriz, ancho*alto));
+
+			char movimiento = 'p';
+			printf("Vidas restantes: %d\n", vidas);
+			printf("Tablero:\n");
+			showMatriz(matriz, ancho, alto);
+
+			int r = rand() % 4;
+
+			switch (r)
+			{
+			case 0:
+				printf("Moviendo hacia arriba\n");
+				cudaStatus = move_up(matriz, ancho, alto);
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaDeviceReset failed!");
+					return 1;
+				}
+				break;
+			case 1:
+				printf("Moviendo hacia izquierda\n");
+				cudaStatus = move_left(matriz, ancho, alto);
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaDeviceReset failed!");
+					return 1;
+				}
+				break;
+			case 2:
+				printf("Moviendo hacia abajo\n");
+				cudaStatus = move_down(matriz, ancho, alto);
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaDeviceReset failed!");
+					return 1;
+				}
+				break;
+			case 3:
+				printf("Moviendo hacia derecha\n");
+				cudaStatus = move_right(matriz, ancho, alto);
+				if (cudaStatus != cudaSuccess) {
+					fprintf(stderr, "cudaDeviceReset failed!");
+					return 1;
+				}
+				break;
+			default:
+				break;
+			}
+
+
+			if (!(!checkFull(matriz, ancho*alto) || checkMove(matriz, ancho, alto)) && vidas > 0)
+			{
+				for (int i = 0; i < ancho*alto; i++) {
+					matriz[i] = 0;
+				}
+				vidas--;
+			}
+
+		}
+
+
+
+		cudaStatus = cudaDeviceReset();
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "cudaDeviceReset failed!");
+			return 1;
+		}
+	}
 	
-
-    cudaStatus = cudaDeviceReset();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceReset failed!");
-        return 1;
-    }
 	
     return 0;
 }
 
 // Metodo que SOLO muestra matrices cuadradas
-void showMatriz(int matriz[], int anchura , int altura)
+void showMatriz(int *matriz, int anchura , int altura)
 {
 	for (int i = 0; i < altura; i++)
 	{
@@ -573,7 +708,7 @@ void showMatriz(int matriz[], int anchura , int altura)
 	}
 }
 
-void generateSeeds(int matriz[], int ancho, int alto,int cantidad, char modo)
+void generateSeeds(int *matriz, int ancho, int alto,int cantidad, char modo)
 {
 	int total = ancho * alto;
 	int num;
@@ -624,55 +759,61 @@ void generateSeeds(int matriz[], int ancho, int alto,int cantidad, char modo)
 	
 }
 
-bool checkMove(int matriz[], int ancho, int alto)
+bool checkMove(int *matriz, int anchura, int altura)
 {
-    int contador = 0;
-    int paso = 0;
-    for (int i = 0; i < alto-1; i++)
-    {
-        for ( int j = 0; j < ancho - 1; j++)
-        {
-            if (matriz[paso] == matriz[paso + ancho] && matriz[paso + ancho]==0)
-                return true;
-            if (matriz[paso] == matriz[paso + 1] && matriz[paso + 1] == 0)
-                return true;
-            paso++;
-        }
-        paso = paso + 2;
+	for (int i = 0; i < anchura*(altura - 1);i++)
+	{
+		if (matriz[i] == matriz[i + anchura] || matriz[i + anchura] == 0)
+		{
+			return true;
+		}
+	}
 
-    }
+	for (int i = anchura; i < anchura*altura ;i++)
+	{
+		if (matriz[i] == matriz[i - anchura] || matriz[i - anchura] == 0)
+		{
+			return true;
+		}
+	}
 
-    paso = paso + ancho-1;
+	for (int i = 0; i < altura ; i++)
+	{
+		for (int j = 0; j < anchura - 1; j++)
+		{
+			if (matriz[i*anchura + i] == matriz[i*anchura + i + 1] || matriz[i*anchura + i + 1] == 0)
+			{
+				return true;
+			}
+		}
+	}
 
-    for (int k = 0; k < alto - 1; k++) 
-    {
-        if (matriz[paso] == matriz[paso + ancho] && matriz[paso + ancho] == 0)
-            return true;
-    }
-
-    paso = ancho*alto-2;
-
-    for (int l = 0; l < ancho-2; l++) 
-    {
-        if (matriz[paso] == matriz[paso + 1] && matriz[paso + ancho] == 0)
-            return true;
-        paso--;
-    }
+	for (int i = 0; i < altura; i++)
+	{
+		for (int j = 1; j < anchura; j++)
+		{
+			if (matriz[i*anchura + i] == matriz[i*anchura + i - 1] || matriz[i*anchura + i - 1] == 0)
+			{
+				return true;
+			}
+		}
+	}
 
 	return false;
 
 }
 
-bool checkFull(int matriz[],int tamano) 
+int checkFull(int *matriz,int tamano) 
 {
+	int flag = 1;
 	for (int i = 0; i < tamano; i++) 
 	{
 		if (matriz[i] == 0)
 		{
-			return false;
+			flag = 0;
 		}
 	}
-	return true;
+	return flag;
 }
 
 void gestionSemillas(int *matriz, int ancho,int numeroSemillas, int alto, char modo)
@@ -758,7 +899,7 @@ int* cargar() {
 	archivo >> anchura;
 	archivo >> dif;
 
-	partida = (int*)malloc(altura * anchura * sizeof(int)); //Reservamos memoria para los datos de la partida
+	partida = (int*)malloc(4*sizeof(int) + altura * anchura * sizeof(int)); //Reservamos memoria para los datos de la partida
 
 	partida[0] = vidas; //Guardamos vidas
 	partida[1] = altura; //Guardamos altura
