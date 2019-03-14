@@ -20,16 +20,124 @@ int* cargar();
 
 cudaError_t cudaStatus;
 
-__global__ void mov_upK(int *matriz, int anchura, int altura) {
+__device__ void add_up(int *matriz, int x, int y, int altura, int anchura)
+{
+	if (y != 0 && y < anchura)
+	{
+		//printf("Soy el hilo alturaa %d id %d valor %d\n", x, y, matriz[x*anchura + y]);
+		if (matriz[x*anchura + y] != 0)
+		{
+			//printf("Soy el hilo alturaa %d id %d valor %d distinto de cero\n", x, y, matriz[x*anchura + y]);
+			if (matriz[x*anchura + y] == matriz[x*anchura + (y - 1)])
+			{
+				//printf("Soy el hilo alturaa %d id %d valor %d y mi anterior hilo alturaa %d id %d valor %d es igual que yo\n", x, y, matriz[x*anchura + y], x, y - 1, matriz[x*anchura + (y - 1)]);
+				int iguales = 0;
+				iguales++;
+				for (int i = 1; i <= y; i++)
+				{
+					if (matriz[x*anchura + y] == matriz[x*anchura + (y - i)])
+					{
+						iguales++;
+					}
+					else {
+						break;
+					}
+				}
+				if (iguales % 2 == 0)
+				{
+					matriz[x*anchura + (y - 1)] = matriz[x*anchura + (y - 1)] * 2;
+					matriz[x*anchura + y] = 0;
+				}
+			}
+			else if (matriz[x*anchura + (y - 1)] == 0)
+			{
+				matriz[x*anchura + (y - 1)] = matriz[x*anchura + y];
+				matriz[x*anchura + y] = 0;
+			}
+		}
+	}
+}
 
+__device__ void stack_up(int *matriz, int anchura, int altura, int x, int y) {
+	//printf("soy el hilo x%d y%d y empiezo a ejecutar\n", x, y);
+	for (int i = altura - 1; i > 0; i--)
+	{
+		if ((x != 0) && (matriz[x*anchura + y] != 0) && matriz[x*anchura + (y - anchura)] == 0)
+		{
+			//printf("soy el hilo x%d y%d y el de mi izquierda es un 0\n", x, y);
+			matriz[x*anchura + (y - anchura)] = matriz[x*anchura + y];
+			matriz[x*anchura + y] = 0;
+		}
+		__syncthreads();
+	}
+}
+
+__global__ void mov_upK(int *matriz, int anchura, int altura) {
+	int x = threadIdx.x;
+	int y = threadIdx.y;
+
+	stack_up(matriz, anchura, altura, x, y);
+	//add_up(matriz, x, y, altura, anchura);
+	stack_up(matriz, anchura, altura, x, y);
 }
 
 
 cudaError_t move_up(int *matriz, int ancho, int alto) {
 	cudaError_t cudaStatus;
 
+	int *dev_m;
+
+	cudaStatus = cudaSetDevice(0);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en setdevice");
+		goto Error;
+	}
+
+	cudaStatus = cudaMalloc((void**)&dev_m, ancho*alto * sizeof(int));
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en Malloc");
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(dev_m, matriz, ancho*alto * sizeof(int), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy failed!");
+		goto Error;
+	}
+
+	dim3 dimgrid(1, 1);
+	dim3 dimblock(ancho, alto, 1);
+
+	mov_upK << < dimgrid, dimblock >> > (dev_m, ancho, alto);
+
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+		goto Error;
+	}
+
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en mov_upK");
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(matriz, dev_m, ancho*alto * sizeof(int), cudaMemcpyDeviceToHost);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en memcpy to host de mov_upK");
+		goto Error;
+	}
+
+Error:
+	cudaFree(dev_m);
+
 	return cudaStatus;
 }
+
 
 __global__ void mov_downK(int *matriz, int anchura, int altura) {
 
@@ -159,14 +267,121 @@ Error:
 	return cudaStatus;
 }
 
-__global__ void mov_rightK(int *matriz, int anchura, int altura) {
+__device__ void add_right(int *matriz, int x, int y, int altura, int anchura)
+{
+	if (y != anchura-1 && y < anchura)
+	{
+		//printf("Soy el hilo alturaa %d id %d valor %d\n", x, y, matriz[x*anchura + y]);
+		if (matriz[x*anchura + y] != 0)
+		{
+			//printf("Soy el hilo alturaa %d id %d valor %d distinto de cero\n", x, y, matriz[x*anchura + y]);
+			if (matriz[x*anchura + y] == matriz[x*anchura + (y + 1)])
+			{
+				//printf("Soy el hilo alturaa %d id %d valor %d y mi anterior hilo alturaa %d id %d valor %d es igual que yo\n", x, y, matriz[x*anchura + y], x, y - 1, matriz[x*anchura + (y - 1)]);
+				int iguales = 0;
+				iguales++;
+				for (int i = 1; i <= y; i++)
+				{
+					if (matriz[x*anchura + y] == matriz[x*anchura + (y + i)])
+					{
+						iguales++;
+					}
+					else {
+						break;
+					}
+				}
+				if (iguales % 2 == 0)
+				{
+					matriz[x*anchura + (y + 1)] = matriz[x*anchura + (y + 1)] * 2;
+					matriz[x*anchura + y] = 0;
+				}
+			}
+			else if (matriz[x*anchura + (y + 1)] == 0)
+			{
+				matriz[x*anchura + (y + 1)] = matriz[x*anchura + y];
+				matriz[x*anchura + y] = 0;
+			}
+		}
+	}
+}
+__device__ void stack_right(int *matriz, int anchura, int altura, int x, int y) {
 
+	//printf("soy el hilo x%d y%d y empiezo a ejecutar\n", x, y);
+	for (int i = anchura - 1; i > 0; i--)
+	{
+		if ((y != anchura-1) && (matriz[x*anchura + y] != 0) && matriz[x*anchura + (y + 1)] == 0)
+		{
+			//printf("soy el hilo x%d y%d y el de mi izquierda es un 0\n", x, y);
+			matriz[x*anchura + (y + 1)] = matriz[x*anchura + y];
+			matriz[x*anchura + y] = 0;
+		}
+		__syncthreads();
+	}
+}
+
+__global__ void mov_rightK(int *matriz, int anchura, int altura) {
+	int x = threadIdx.x;
+	int y = threadIdx.y;
+
+	stack_right(matriz, anchura, altura, x, y);
+	add_right(matriz, x, y, altura, anchura);
+	stack_right(matriz, anchura, altura, x, y);
 }
 
 
 
 cudaError_t move_right(int *matriz, int ancho, int alto) {
 	cudaError_t cudaStatus;
+
+	int *dev_m;
+
+	cudaStatus = cudaSetDevice(0);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en setdevice");
+		goto Error;
+	}
+
+	cudaStatus = cudaMalloc((void**)&dev_m, ancho*alto * sizeof(int));
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en Malloc");
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(dev_m, matriz, ancho*alto * sizeof(int), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy failed!");
+		goto Error;
+	}
+
+	dim3 dimgrid(1, 1);
+	dim3 dimblock(ancho, alto, 1);
+
+	mov_rightK << < dimgrid, dimblock >> > (dev_m, ancho, alto);
+
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+		goto Error;
+	}
+
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en mov_upK");
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(matriz, dev_m, ancho*alto * sizeof(int), cudaMemcpyDeviceToHost);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "Error en memcpy to host de mov_upK");
+		goto Error;
+	}
+
+Error:
+	cudaFree(dev_m);
 
 	return cudaStatus;
 }
